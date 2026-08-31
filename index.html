@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>cope</title>
+<style>
+  :root{
+    --ink:#e8e4e6; --dim:#8b8289; --faint:#4a4348;
+    --bg:#141115; --panel:#1c181d; --line:#2a252b;
+    --warm:#e8a33d; --ok:#5fbf8a; --alarm:#e2705f;
+    --serif:Georgia,"Palatino Linotype",Palatino,serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--serif);font-size:17px;line-height:1.55}
+  body{max-width:640px;margin:0 auto;padding:22px 18px 90px}
+  h1{font-size:34px;margin:.2em 0 0;letter-spacing:-.5px}
+  .rot{display:inline-block;transform:rotate(180deg)}
+  .sub{color:var(--dim);margin:.2em 0 1.6em;font-size:15px}
+  section{background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:18px;margin:0 0 16px}
+  h2{font-size:15px;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--dim);margin:0 0 12px;font-family:system-ui,sans-serif}
+  button{font:inherit;background:#241f26;color:var(--ink);
+    border:1px solid var(--line);border-radius:9px;padding:11px 18px;cursor:pointer}
+  button:hover:not(:disabled){border-color:var(--dim)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.go{background:var(--warm);color:#1a1419;border-color:var(--warm);font-weight:600}
+  textarea,input{font:inherit;width:100%;background:#100d11;color:var(--ink);
+    border:1px solid var(--line);border-radius:9px;padding:12px;resize:vertical}
+  textarea{min-height:110px}
+  .heard{font-size:19px;white-space:pre-wrap;padding:6px 2px 10px}
+  .quiet{color:var(--dim);font-style:italic}
+  .row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+  .marks label{font-size:13px;color:var(--dim);border:1px solid var(--line);
+    border-radius:20px;padding:5px 11px;cursor:pointer;font-family:system-ui,sans-serif}
+  .marks input{width:auto;margin-right:6px}
+  .day{font-size:44px;letter-spacing:-1px}
+  .day.special{color:var(--warm)}
+  .note{font-size:13.5px;color:var(--dim);font-family:system-ui,sans-serif;line-height:1.5}
+  .held{border-left:3px solid var(--warm);padding-left:12px}
+  footer{position:fixed;left:0;right:0;bottom:0;background:#0f0c10;
+    border-top:1px solid var(--line);padding:9px 14px;text-align:center;
+    font-size:13px;color:var(--dim);font-family:system-ui,sans-serif}
+  footer b{color:var(--alarm)}
+  a{color:var(--dim)}
+</style>
+</head>
+<body>
+
+<h1>co<span class="rot">d</span>e</h1>
+<p class="sub">Say a true thing. Hear one back. Nothing is kept.</p>
+
+<!-- Listen first. You cannot speak until you have heard, and that is the
+     only rule the room has. -->
+<section id="hear-box">
+  <h2>Listen first</h2>
+  <div id="heard" class="heard quiet">Nothing yet.</div>
+  <div class="row">
+    <button id="hear" class="go">Hear something</button>
+    <span id="hear-note" class="note"></span>
+  </div>
+</section>
+
+<section id="say-box" hidden>
+  <h2>Now say one thing</h2>
+  <textarea id="text" placeholder="Whatever is true right now."></textarea>
+  <p class="note" style="margin:10px 0 6px">
+    Mark it if it is heavy, so it only reaches somebody who asked for it.
+  </p>
+  <div class="row marks" id="say-marks"></div>
+  <div class="row" style="margin-top:12px">
+    <button id="say" class="go">Send it to one person</button>
+    <span id="say-note" class="note"></span>
+  </div>
+</section>
+
+<section>
+  <h2>Your triggers</h2>
+  <p class="note" style="margin-top:0">
+    One per line. Words, names, anything. Checked <b>on this device only</b> —
+    they are never sent anywhere, not even to decide what you see.
+  </p>
+  <textarea id="triggers" placeholder="a street name&#10;a brand&#10;someone's name"></textarea>
+  <div class="row" style="margin-top:10px">
+    <button id="save-trig">Save</button>
+    <button id="pack-btn">Load a pack</button>
+    <span id="trig-note" class="note"></span>
+  </div>
+  <div id="packs" hidden style="margin-top:12px">
+    <p class="note">
+      Packs are <b>written</b> by somebody, never gathered from what anyone
+      blocked. Nothing here learns from you.
+    </p>
+    <div class="row" id="pack-list"></div>
+  </div>
+</section>
+
+<section>
+  <h2>Days</h2>
+  <div id="day" class="day">—</div>
+  <p class="note" id="day-note" style="margin:6px 0 12px">
+    Counted on this device. Nobody else holds it. Nobody can take it.
+  </p>
+  <div class="row">
+    <button id="start-day">Start counting</button>
+    <button id="reset-day">Back to day 1</button>
+    <button id="send-day" hidden>Send just the number</button>
+  </div>
+  <p class="note" style="margin-bottom:0">
+    Day 1 is the same as day 1000. There is no leaderboard and there never will be.
+  </p>
+</section>
+
+<footer>
+  Not treatment. Nobody is watching. If you are in danger call <b>988</b> (US)
+  or your local emergency number.
+</footer>
+
+<script>
+// ---------------------------------------------------------------- storage
+// Everything personal lives here and only here. The server is never told any
+// of it -- not the triggers, not the day count, not what was filtered.
+const store = {
+  get(k, d){ try { return JSON.parse(localStorage.getItem('cope.'+k)) ?? d; } catch { return d; } },
+  set(k, v){ try { localStorage.setItem('cope.'+k, JSON.stringify(v)); } catch {} },
+};
+
+const MARKS = [
+  ['using',     'using — methods, amounts, what it was like'],
+  ['relapse',   'relapse — going back out'],
+  ['overdose',  'overdose — including deaths'],
+  ['self-harm', 'self-harm'],
+  ['medical',   'medical — detox, withdrawal, hospitals'],
+];
+
+// Written packs. Authored deliberately, never derived from anybody's use.
+const PACKS = {
+  'Common in early recovery': ['using alone','one more','just once','cut down','celebrate with','payday'],
+  'Places and people':        ['the bridge','my old street','the parking lot','my dealer','my ex'],
+  'Bodily detail':            ['needle','vein','snort','pipe','withdrawal','dopesick'],
+};
+
+// ---------------------------------------------------------------- triggers
+function triggers(){
+  return store.get('triggers','').split('\n').map(s=>s.trim().toLowerCase()).filter(Boolean);
+}
+function matched(text){
+  const low = text.toLowerCase();
+  return triggers().filter(t => low.includes(t));
+}
+
+const trigBox = document.getElementById('triggers');
+trigBox.value = store.get('triggers','');
+document.getElementById('save-trig').onclick = () => {
+  store.set('triggers', trigBox.value);
+  note('trig-note', triggers().length + ' saved, on this device only');
+};
+document.getElementById('pack-btn').onclick = () => {
+  const el = document.getElementById('packs');
+  el.hidden = !el.hidden;
+};
+const packList = document.getElementById('pack-list');
+Object.entries(PACKS).forEach(([name, words]) => {
+  const b = document.createElement('button');
+  b.textContent = name;
+  b.onclick = () => {
+    // Added to what you have, never replacing it. Your own words come first.
+    const have = new Set(triggers());
+    const merged = [...triggers(), ...words.filter(w => !have.has(w))];
+    trigBox.value = merged.join('\n');
+    store.set('triggers', trigBox.value);
+    note('trig-note', 'added ' + words.length + ' — edit or delete any of them');
+  };
+  packList.appendChild(b);
+});
+
+// ---------------------------------------------------------------- marks
+const sayMarks = document.getElementById('say-marks');
+MARKS.forEach(([id, label]) => {
+  const l = document.createElement('label');
+  l.innerHTML = '<input type="checkbox" value="'+id+'"> '+id;
+  l.title = label;
+  sayMarks.appendChild(l);
+});
+function chosenMarks(){
+  return [...sayMarks.querySelectorAll('input:checked')].map(i=>i.value);
+}
+
+// ---------------------------------------------------------------- the wire
+let mayspeak = false;
+
+function note(id, text){
+  const el = document.getElementById(id);
+  el.textContent = text;
+  setTimeout(()=>{ if(el.textContent===text) el.textContent=''; }, 5000);
+}
+
+async function hear(){
+  const btn = document.getElementById('hear');
+  btn.disabled = true;
+  const out = document.getElementById('heard');
+  try {
+    // We accept everything from the server and filter here, so the server
+    // never learns which marks a person avoids.
+    const r = await fetch('/hear', {
+      method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ accepts: MARKS.map(m=>m[0]) })
+    });
+    const data = await r.json();
+    if (data.empty){
+      out.className = 'heard quiet';
+      out.textContent = 'Nobody has said anything yet. Say something first and wait.';
+      mayspeak = true;                     // an empty room should not lock you out
+      document.getElementById('say-box').hidden = false;
+      return;
+    }
+    const hits = matched(data.text);
+    if (hits.length){
+      out.className = 'heard held';
+      out.innerHTML = '<span class="quiet">Something arrived that matches your word '
+        + '<b>' + hits[0].replace(/[<>&]/g,'') + '</b>. You do not have to read it.</span><br><br>';
+      const show = document.createElement('button');
+      show.textContent = 'Show it anyway';
+      show.onclick = () => { out.className='heard'; out.textContent = data.text; };
+      const skip = document.createElement('button');
+      skip.textContent = 'Let it go';
+      skip.onclick = () => { out.className='heard quiet'; out.textContent='Let go. It is gone.'; };
+      out.append(show, ' ', skip);
+    } else {
+      out.className = 'heard';
+      out.textContent = data.text;
+    }
+    mayspeak = true;
+    document.getElementById('say-box').hidden = false;
+    note('hear-note', 'heard. it is gone from the wire now.');
+  } catch {
+    note('hear-note', 'could not reach the wire');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function say(){
+  if (!mayspeak) return;
+  const box = document.getElementById('text');
+  const text = box.value.trim();
+  if (!text) return;
+  const btn = document.getElementById('say');
+  btn.disabled = true;
+  try {
+    await fetch('/say', {
+      method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ text, marks: chosenMarks() })
+    });
+    box.value = '';
+    sayMarks.querySelectorAll('input').forEach(i=>i.checked=false);
+    mayspeak = false;
+    document.getElementById('say-box').hidden = true;
+    note('hear-note', 'said. one person will hear it. listen again when you want to speak again.');
+  } catch {
+    note('say-note', 'could not reach the wire');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('hear').onclick = hear;
+document.getElementById('say').onclick = say;
+
+// ---------------------------------------------------------------- days
+function dayCount(){
+  const start = store.get('start', null);
+  if (!start) return null;
+  return Math.floor((Date.now() - start) / 86400000) + 1;
+}
+function isSpecial(n){
+  const s = String(n);
+  if (s.length > 1 && new Set(s).size === 1) return 'all the same digit';
+  if (s.length > 2 && s === [...s].reverse().join('')) return 'a palindrome';
+  if (n % 100 === 0) return 'a round hundred';
+  if (n % 30 === 0) return 'another month';
+  return null;
+}
+function drawDay(){
+  const n = dayCount();
+  const el = document.getElementById('day');
+  const note = document.getElementById('day-note');
+  const send = document.getElementById('send-day');
+  if (n === null){
+    el.textContent = '—'; el.className = 'day'; send.hidden = true;
+    return;
+  }
+  el.textContent = 'Day ' + n;
+  const why = isSpecial(n);
+  el.className = 'day' + (why ? ' special' : '');
+  note.textContent = why
+    ? 'Day ' + n + ' — ' + why + '. Counted here, held by nobody.'
+    : 'Counted on this device. Nobody else holds it. Nobody can take it.';
+  send.hidden = !why;
+}
+document.getElementById('start-day').onclick = () => {
+  store.set('start', Date.now()); drawDay();
+};
+document.getElementById('reset-day').onclick = () => {
+  // No confirmation and no commentary. Starting again is not a failure state.
+  store.set('start', Date.now()); drawDay();
+};
+document.getElementById('send-day').onclick = async () => {
+  const n = dayCount();
+  await fetch('/say', {
+    method:'POST', headers:{'content-type':'application/json'},
+    body: JSON.stringify({ text: 'Day ' + n + '.', marks: [] })
+  }).catch(()=>{});
+  note('day-note', 'sent. somebody will know what it means.');
+};
+drawDay();
+</script>
+</body>
+</html>

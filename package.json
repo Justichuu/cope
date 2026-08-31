@@ -1,0 +1,23 @@
+{
+  "name": "cope",
+  "version": "1.0.0",
+  "description": "Say a true thing. Hear one back. Nothing is kept.",
+  "license": "MIT",
+  "author": "Justichuu",
+  "homepage": "https://chuumind.com",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --check server.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Justichuu/cope.git"
+  },
+  "keywords": [
+    "privacy",
+    "local-first",
+    "happyware",
+    "chuumind"
+  ]
+}
