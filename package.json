@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --check server.mjs"
+    "test": "node --check server.mjs && node --test"
   },
   "repository": {
     "type": "git",
